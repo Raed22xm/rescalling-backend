@@ -1,15 +1,12 @@
 const express = require("express")
 const router = express.Router()
-
+const createUser = require("../controllers/user.controller.js")
 router.get("/" , function(req , res){
     // console.log("Api called")
     res.send("USER GET")
 })
 
-router.post("/" , function(req , res){
-    // console.log("Api called")
-    res.send("USER POST")
-})
+router.post("/" , createUser)
 router.put("/" , function(req , res){
     // console.log("Api called")
     res.send("USER PUT")

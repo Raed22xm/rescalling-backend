@@ -3,7 +3,14 @@ const app = express()
 require("dotenv").config()
 const userRoutes = require("./src/routes/user.routes.js")
 const resizeRoutes = require("./src/routes/resize.routes.js")
+
+
+app.use(express.json())
+
 const connectDb = require("./src/config/db.js")
+
+
+
 // production -> folder managment -> folder things
 connectDb()
 
