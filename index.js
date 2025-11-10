@@ -22,5 +22,6 @@ app.use("/api/v1/resize" , resizeRoutes)
 
 
 app.listen(4001 , function(){
-    console.log("Server Started")
+    
+    console.log("Server listening @ localhost:4001")
 })
