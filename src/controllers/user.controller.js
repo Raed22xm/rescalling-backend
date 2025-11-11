@@ -1,7 +1,7 @@
 const userModel = require("../models/user.model.js")
 const bcrypt = require("bcrypt")
 const { generateAccessToken, generateRefreshToken } = require("../service/auth.js")
-
+const jwt = require("jsonwebtoken")
 exports.createAccount = async function (req, res) {
 
     //  Password -> directly storing -> db got hackend -> hackers will get id and password 
@@ -104,4 +104,36 @@ exports.logout = async function (req, res) {
     await user.save()
 
     return res.status(200).json({ message: "Logout successful, refresh token cleared" })
+}
+
+
+exports.refreshToken = async function(req , res){
+    try{
+        const {refreshToken} = req.body
+
+        const user = await userModel.findOne({refreshToken})
+
+        if(!user){
+            return res.send({message : "Invalid Refresh Token"})
+        }
+
+
+        jwt.verify(refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY , function(err , decode){
+            if(err){
+                return res.send({message : "Refresh Token Expired"})
+            }
+
+            const newTokenAccess = generateAccessToken({ userId: user._id, email: user.email })
+
+            res.json({
+                message : "Token Refreshed Successfully"
+                ,
+                accessToken : newTokenAccess
+            })
+        })
+
+    }catch(err){
+        console.log(err)
+        res.send("Server error " , err)
+    }
 }
