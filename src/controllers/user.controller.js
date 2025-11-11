@@ -47,6 +47,7 @@ exports.createAccount = async function (req, res) {
     res.send("Create User is ready")
 }
 
+// login function which will be used to login the user to the system which will return a token and refresh token
 exports.loginAccount = async function (req, res) {
     const { email, password } = req.body
 
@@ -85,7 +86,7 @@ exports.loginAccount = async function (req, res) {
     })
 }
 
-
+// logout function which will be used to logout the user from the system
 exports.logout = async function (req, res) {
     const { refreshToken } = req.body
 
