@@ -43,7 +43,7 @@ exports.resizeImage = async function (req, res) {
 
     
     if (!imageLink) {
-        res.status(400).json({
+        return res.status(400).json({
             message: "Invalid Link , please send proper image link !"
         })
     }
@@ -54,7 +54,7 @@ exports.resizeImage = async function (req, res) {
         })
     }
 
-    const user = await userModel.find({userId})
+    const user = await userModel.findById(userId)
 
     if(!user){
        return res.status(400).json({
@@ -62,11 +62,14 @@ exports.resizeImage = async function (req, res) {
         })
     }
 
-    const validRefreshToken = jwt.verify(user.refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY )
+    if(!user.refreshToken){
+        return res.status(401).json({message : "Refresh token missing, please login again to process image resizing"})
+    }
 
-
-    if(!validRefreshToken){
-        return res.status(400).json({message : "refreshToken Invalid please login again to process image resizing"})
+    try{
+        jwt.verify(user.refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY )
+    }catch(err){
+        return res.status(401).json({message : "Refresh token invalid or expired, please login again to process image resizing"})
     }
 
     const response = await axios.get(imageLink, { responseType: "arraybuffer" })
@@ -75,7 +78,7 @@ exports.resizeImage = async function (req, res) {
     const metadata = await sharpInstance.metadata()
 
     const sizeInMb = metadata.size / (1024 * 1024)
-    if(sizeInMb > 2){
+    if(sizeInMb > 3){
         return res.status(400).json({message : "Image larger then 2 mb"})
     }
 
@@ -175,4 +178,13 @@ exports.getAllResizes = async function(req , res){
         "data" : resizes
     })
 
+}
+
+exports.getSpecificResize = async function(req , res){
+    const userId = req.params.userId
+    const resizeId = req.params.resizeId
+
+    const resizeData =await resizeModel.findOne({userId , _id : resizeId})
+
+    res.status(200).json({message : "data succeffully fetched" , data : resizeData})
 }

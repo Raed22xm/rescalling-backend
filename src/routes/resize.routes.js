@@ -1,12 +1,11 @@
 const express = require("express")
 const { resizeImage } = require("../controllers/resize.controller")
 const {getAllResizes} = require("../controllers/resize.controller")
+const {getSpecificResize} = require("../controllers/resize.controller")
 const router  = express.Router()
 
 
-router.get("/:id" , function(req ,res){
-    res.send("RESIZE GET")
-})
+router.get("/:userId/:resizeId" , getSpecificResize)
 router.get("/all/:userId" , getAllResizes )
 
 
