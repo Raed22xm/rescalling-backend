@@ -1,12 +1,14 @@
 const express = require("express")
-const { resizeImage } = require("../controllers/resize.routes")
-
+const { resizeImage } = require("../controllers/resize.controller")
+const {getAllResizes} = require("../controllers/resize.controller")
 const router  = express.Router()
 
 
-router.get("/" , function(req ,res){
+router.get("/:id" , function(req ,res){
     res.send("RESIZE GET")
 })
+router.get("/all/:userId" , getAllResizes )
+
 
 router.post("/resizeImg" , resizeImage)
 
