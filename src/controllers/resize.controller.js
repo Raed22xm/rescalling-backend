@@ -188,3 +188,16 @@ exports.getSpecificResize = async function(req , res){
 
     res.status(200).json({message : "data succeffully fetched" , data : resizeData})
 }
+
+exports.deleteResize = async function(req ,res){
+    try{
+        const resizeId = req.params.resizeId
+
+        const resizeValue = await resizeModel.deleteOne({_id : resizeId})
+    
+        res.status(200).json({message : `Deleted resize with id ${resizeId}`})
+    }catch(err){
+        res.status(500).json({message : "Server Error"})
+    }
+   
+}

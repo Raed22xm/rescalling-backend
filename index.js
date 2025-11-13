@@ -3,9 +3,13 @@ const app = express()
 require("dotenv").config()
 const userRoutes = require("./src/routes/user.routes.js")
 const resizeRoutes = require("./src/routes/resize.routes.js")
-
+const cors = require("cors")
 
 app.use(express.json())
+app.use(cors( {
+    origin: "http://localhost:3000",
+    credentials: true,
+}))
 
 const connectDb = require("./src/config/db.js")
 
