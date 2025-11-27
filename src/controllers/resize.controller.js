@@ -68,7 +68,7 @@ exports.resizeImage = async function (req, res) {
 
     try{
         jwt.verify(user.refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY )
-    }catch(err){
+    }catch{
         return res.status(401).json({message : "Refresh token invalid or expired, please login again to process image resizing"})
     }
 
@@ -193,10 +193,10 @@ exports.deleteResize = async function(req ,res){
     try{
         const resizeId = req.params.resizeId
 
-        const resizeValue = await resizeModel.deleteOne({_id : resizeId})
-    
+        await resizeModel.deleteOne({_id : resizeId})
+
         res.status(200).json({message : `Deleted resize with id ${resizeId}`})
-    }catch(err){
+    }catch{
         res.status(500).json({message : "Server Error"})
     }
    

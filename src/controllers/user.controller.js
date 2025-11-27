@@ -119,7 +119,7 @@ exports.refreshToken = async function(req , res){
         }
 
 
-        jwt.verify(refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY , function(err , decode){
+        jwt.verify(refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY , function(err){
             if(err){
                 return res.send({message : "Refresh Token Expired"})
             }
