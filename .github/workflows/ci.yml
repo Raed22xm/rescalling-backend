@@ -29,5 +29,5 @@ jobs:
     - name: Lint
       run: npm run lint
       
-    - name: Tests (placeholder)
+    - name: Tests
       run: npm test

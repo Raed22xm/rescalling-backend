@@ -55,9 +55,6 @@ exports.jwtverifyAccessToken = function(req, res, next) {
      */
     const token = authHeader.startsWith("Bearer") && authHeader.split(" ")[1];
     
-    // Debug log to see the extracted token (remove in production)
-    console.log(token)
-    
     /**
      * Validate that a token was successfully extracted.
      * If no token is present, the request is unauthorized.
@@ -67,9 +64,6 @@ exports.jwtverifyAccessToken = function(req, res, next) {
         // Return early with error response - don't proceed to route handler
         return res.status(401).json({ message: "Token is missing !!" })
     }
-    
-    // Debug log to check if secret key is loaded (remove in production)
-    console.log(process.env.ACCESS_TOKEN_SECRET)
     
     /**
      * Try to verify the token using jwt.verify()
