@@ -7,6 +7,7 @@ require("dotenv").config()
 const userRoutes = require("./routes/user.routes.js")
 const resizeRoutes = require("./routes/resize.routes.js")
 const logger = require("./utils/logger.js")
+const { register, httpRequestsTotal, httpRequestDurationMs, mongoConnectionState } = require("./utils/metrics.js")
 
 const app = express()
 
@@ -20,17 +21,24 @@ const limiter = rateLimit({
 })
 app.use(limiter)
 
-// Simple request logger
+// Simple request logger + metrics
 app.use(function(req, res, next) {
     const start = process.hrtime.bigint()
     res.on("finish", () => {
         const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000
+
+        // Log
         logger.info({
             method: req.method,
             url: req.originalUrl,
             statusCode: res.statusCode,
             durationMs: durationMs.toFixed(2)
         })
+
+        // Metrics
+        const routeLabel = req.route?.path || req.originalUrl || "unknown"
+        httpRequestsTotal.inc({ method: req.method, route: routeLabel, status: res.statusCode })
+        httpRequestDurationMs.observe({ method: req.method, route: routeLabel, status: res.statusCode }, durationMs)
     })
     next()
 })
@@ -59,6 +67,15 @@ app.get("/healthz", async function(req, res) {
 
     const code = status.ok ? 200 : 503
     res.status(code).json(status)
+})
+
+// Metrics endpoint
+app.get("/metrics", async function(req, res) {
+    // Update mongo connection gauge
+    const mongoState = mongoose.connection.readyState
+    mongoConnectionState.set(mongoState)
+    res.set("Content-Type", register.contentType)
+    res.end(await register.metrics())
 })
 
 // Routes -> for all routes for a specific entity
