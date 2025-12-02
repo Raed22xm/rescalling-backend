@@ -44,10 +44,26 @@ app.use(function(req, res, next) {
 })
 
 app.use(express.json())
-app.use(cors( {
-    origin: "http://localhost:3000",
+const allowedOrigins = [
+    "http://localhost:3000",
+    "https://raed-web-next.vercel.app",
+]
+
+app.use(cors({
+    origin: function(origin, callback) {
+        if (!origin) return callback(null, true) // allow curl/postman
+        if (allowedOrigins.includes(origin) || origin.endsWith(".vercel.app")) {
+            return callback(null, true)
+        }
+        return callback(new Error("Not allowed by CORS"))
+    },
     credentials: true,
 }))
+
+// Root route
+app.get("/", (req, res) => {
+    res.send("API running")
+})
 
 // Basic healthcheck with DB status
 app.get("/healthz", async function(req, res) {
