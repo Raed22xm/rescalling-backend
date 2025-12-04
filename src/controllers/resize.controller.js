@@ -4,6 +4,7 @@ const cloudinary = require("cloudinary").v2;
 const resizeModel = require("../models/resize.model.js");
 const userModel = require("../models/user.model.js");
 const jwt = require("jsonwebtoken")
+const logger = require("../utils/logger.js"); // Import logger
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -12,192 +13,210 @@ cloudinary.config({
 
 
 exports.resizeImage = async function (req, res) {
-// cases 
-    // 1 user is authentication logged in then resizes 
-    // 2 user is not logged and in resizing 
-    // 3 while resizing access oken or refresh token got expired 
-    // 4 before doing resizing we should check for token validation
-    // resizing is only limited to people (our ) not public 
+    try {
+        const { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, userId } = req.body
 
+        if (!imageLink) {
+            return res.status(400).json({
+                message: "Invalid Link , please send proper image link !"
+            })
+        }
 
-    // it inceases backend security 
-    // validation before processing resize 
-        // image validations
-        // we can not process a image more then 2 mb
-        // we can not process a image more then 2 k resoltuion
-        // we can not process a bulk images at one time 
+        if (!userId) {
+            return res.status(400).json({
+                message: "Cant process your request , user id not available !"
+            })
+        }
 
-        // client sent 5 images one time 
-        //  one time one image 
+        const user = await userModel.findById(userId)
 
-        // for 24 hours user can do 5 images only 
+        if (!user) {
+            return res.status(400).json({
+                message: `Invalid user with id ${userId}`
+            })
+        }
 
-        // crash your app in future 
+        if (!user.refreshToken) {
+            return res.status(401).json({ message: "Refresh token missing, please login again to process image resizing" })
+        }
 
+        try {
+            jwt.verify(user.refreshToken, process.env.REFRESH_TOKEN_SECRET_KEY)
+        } catch {
+            return res.status(401).json({ message: "Refresh token invalid or expired, please login again to process image resizing" })
+        }
 
-    // resizing
-    // how to earn through it  
+        // Fetch image with error handling
+        let response;
+        try {
+            response = await axios.get(imageLink, { responseType: "arraybuffer", timeout: 30000 })
+        } catch (error) {
+            return res.status(400).json({
+                message: "Failed to fetch image from the provided link. Please check the image URL."
+            })
+        }
 
-    // we can provide a basic thing that for 1 dollar you can do 10 resizing per day 
-    const { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, userId } = req.body
+        const imageBuffer = Buffer.from(response.data)
+        const sharpInstance = sharp(imageBuffer);
 
-    
-    if (!imageLink) {
-        return res.status(400).json({
-            message: "Invalid Link , please send proper image link !"
-        })
-    }
+        let metadata;
+        try {
+            metadata = await sharpInstance.metadata()
+        } catch (error) {
+            return res.status(400).json({
+                message: "Invalid image format or corrupted image file."
+            })
+        }
 
-    if(!userId){
-        return res.status(400).json({
-            message : "Cant process your request , user id not available !"
-        })
-    }
+        const sizeInMb = metadata.size / (1024 * 1024)
+        if (sizeInMb > 3) {
+            return res.status(400).json({ message: "Image larger then 3 mb" })
+        }
 
-    const user = await userModel.findById(userId)
+        if (metadata.width > 2000 || metadata.height > 2000) {
+            return res.status(400).json({ message: "Image exceeds 2000px in either height and width" })
+        }
 
-    if(!user){
-       return res.status(400).json({
-            message : `Invalid user with id ${userId}`
-        })
-    }
+        // quota based resizing 5 / day
+        let now = new Date();
+        const startOfDay = new Date(now)
+        startOfDay.setHours(0, 0, 0, 0)
 
-    if(!user.refreshToken){
-        return res.status(401).json({message : "Refresh token missing, please login again to process image resizing"})
-    }
+        let last24hourImagesCount = await resizeModel.countDocuments({ userId, date: { $gt: startOfDay } })
 
-    try{
-        jwt.verify(user.refreshToken , process.env.REFRESH_TOKEN_SECRET_KEY )
-    }catch{
-        return res.status(401).json({message : "Refresh token invalid or expired, please login again to process image resizing"})
-    }
+        if (last24hourImagesCount >= 5) {
+            return res.status(429).json({ message: "Daily Resize quota reached" })
+        }
 
-    const response = await axios.get(imageLink, { responseType: "arraybuffer" })
-    const imageBuffer = Buffer.from(response.data)
-    const sharpInstance = sharp(imageBuffer);
-    const metadata = await sharpInstance.metadata()
+        // Parse width/height that may include "px"
+        let parsedWidth, parsedHeight;
+        if (width && typeof width === "string") {
+            parsedWidth = parseInt(width.replace("px", "").trim())
+        } else if (width) {
+            parsedWidth = parseInt(width)
+        }
 
-    const sizeInMb = metadata.size / (1024 * 1024)
-    if(sizeInMb > 3){
-        return res.status(400).json({message : "Image larger then 2 mb"})
-    }
+        if (height && typeof height === "string") {
+            parsedHeight = parseInt(height.replace("px", "").trim())
+        } else if (height) {
+            parsedHeight = parseInt(height)
+        }
 
-    if(metadata.width > 2000 || metadata.height > 2000){
-        return res.status(400).json({message : "Image exceeds 2000px in either height and width"})
-    }
+        let resizeOptions = {};
 
+        if (presetSize && presetSize !== "custom") {
+            const presets = {
+                small: { width: 300, height: 300 },
+                medium: { width: 600, height: 400 },
+                large: { width: 1200, height: 800 },
+            };
+            resizeOptions = presets[presetSize] || {};
+        } else if (size === "custom") {
+            resizeOptions = {
+                width: parsedWidth && !isNaN(parsedWidth) ? parsedWidth : undefined,
+                height: parsedHeight && !isNaN(parsedHeight) ? parsedHeight : undefined,
+            };
+        }
 
-// quota based resizing 5 / day 
+        if (resizeOptions.width || resizeOptions.height) {
+            sharpInstance.resize({
+                width: resizeOptions.width,
+                height: resizeOptions.height,
+                fit: manageAspectRatio ? "inside" : "fill", // maintain aspect ratio if true
+            });
+        }
 
-// every time user sents a request for resizing we will note that time of request made and first in our db we will find images 
+        let resizedBuffer;
+        try {
+            resizedBuffer = await sharpInstance
+                .toFormat(outputFormat || "jpg")
+                .toBuffer();
+        } catch (error) {
+            return res.status(400).json({
+                message: "Failed to resize image. Invalid output format or processing error."
+            })
+        }
 
-// form the request time back to 24 hours 
-//  lets say we got < 5 images in last 24 hours then we will process the request else not 
+        let uploadResult;
+        try {
+            uploadResult = await new Promise((resolve, reject) => {
+                const uploadStream = cloudinary.uploader.upload_stream(
+                    {
+                        folder: "resized-images",
+                        resource_type: "image",
+                        format: outputFormat || "jpg",
+                    },
+                    (error, result) => {
+                        if (error) reject(error);
+                        else resolve(result);
+                    }
+                );
 
-    let now = new Date();
-    const startOfDay = new Date(now)
+                uploadStream.end(resizedBuffer);
+            });
+        } catch (error) {
+            logger.error({ err: error }, "Cloudinary upload error");
+            return res.status(500).json({
+                message: "Failed to upload resized image to cloud storage."
+            })
+        }
 
-    startOfDay.setHours(0,0,0,0)
+        try {
+            await resizeModel.create({
+                imageLink: uploadResult.secure_url,
+                imageFormat: outputFormat || "jpg",
+                date: new Date(),
+                options: { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat },
+                userId: userId
+            })
+        } catch (error) {
+            console.error("Database save error:", error);
+            // image uploaded but DB write failed; continue returning success
+        }
 
-
-    let last24hourImagesCount = await resizeModel.countDocuments({userId , date : {$gt : startOfDay}})
-
-    if(last24hourImagesCount >= 5){
-        return res.status(429).json({message : "Daily Resize quota reached"})
-    }
-
-    let resizeOptions = {};
-
-    if (presetSize && presetSize !== "custom") {
-        const presets = {
-            small: { width: 300, height: 300 },
-            medium: { width: 600, height: 400 },
-            large: { width: 1200, height: 800 },
-        };
-        resizeOptions = presets[presetSize] || {};
-    } else if (size === "custom") {
-        resizeOptions = {
-            width: width ? parseInt(width) : undefined,
-            height: height ? parseInt(height) : undefined,
-        };
-    }
-
-    if (resizeOptions.width || resizeOptions.height) {
-        sharpInstance.resize({
-            width: resizeOptions.width,
-            height: resizeOptions.height,
-            fit: manageAspectRatio ? "inside" : "fill", // maintain aspect ratio if true
+        res.status(200).json({
+            success: true,
+            message: "Image resized and uploaded successfully",
+            resizedImageUrl: uploadResult.secure_url,
+        });
+    } catch (error) {
+        logger.error({ err: error }, "Resize image error");
+        res.status(500).json({
+            message: "Internal server error while processing image resize",
+            error: process.env.NODE_ENV === "development" ? error.message : undefined
         });
     }
-
-
-    const resizedBuffer = await sharpInstance
-        .toFormat(outputFormat)
-        .toBuffer();
-
-    const uploadResult = await new Promise((resolve, reject) => {
-        const uploadStream = cloudinary.uploader.upload_stream(
-            {
-                folder: "resized-images",
-                resource_type: "image",
-                format: outputFormat,
-            },
-            (error, result) => {
-                if (error) reject(error);
-                else resolve(result);
-            }
-        );
-
-        uploadStream.end(resizedBuffer);
-    });
-
-    await resizeModel.create({
-        imageLink: uploadResult.secure_url,
-        imageFormat: outputFormat,
-        date: new Date(),
-        options: { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat },
-        userId : userId
-    })
-
-
-    res.status(200).json({
-        success: true,
-        message: "Image resized and uploaded successfully",
-        resizedImageUrl: uploadResult.secure_url,
-    });
-
-
 }
 
-exports.getAllResizes = async function(req , res){
+exports.getAllResizes = async function (req, res) {
     const userId = req.params.userId
-    let resizes = await resizeModel.find({userId})
+    let resizes = await resizeModel.find({ userId })
 
     res.status(200).json({
-        "message" : "successfully fetched all resizes",
-        "data" : resizes
+        "message": "successfully fetched all resizes",
+        "data": resizes
     })
 
 }
 
-exports.getSpecificResize = async function(req , res){
+exports.getSpecificResize = async function (req, res) {
     const userId = req.params.userId
     const resizeId = req.params.resizeId
 
-    const resizeData =await resizeModel.findOne({userId , _id : resizeId})
+    const resizeData = await resizeModel.findOne({ userId, _id: resizeId })
 
-    res.status(200).json({message : "data succeffully fetched" , data : resizeData})
+    res.status(200).json({ message: "data succeffully fetched", data: resizeData })
 }
 
-exports.deleteResize = async function(req ,res){
-    try{
+exports.deleteResize = async function (req, res) {
+    try {
         const resizeId = req.params.resizeId
 
-        await resizeModel.deleteOne({_id : resizeId})
+        await resizeModel.deleteOne({ _id: resizeId })
 
-        res.status(200).json({message : `Deleted resize with id ${resizeId}`})
-    }catch{
-        res.status(500).json({message : "Server Error"})
+        res.status(200).json({ message: `Deleted resize with id ${resizeId}` })
+    } catch {
+        res.status(500).json({ message: "Server Error" })
     }
-   
+
 }
