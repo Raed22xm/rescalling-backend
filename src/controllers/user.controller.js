@@ -3,87 +3,110 @@ const bcrypt = require("bcrypt")
 const { generateAccessToken, generateRefreshToken } = require("../service/auth.js")
 const jwt = require("jsonwebtoken")
 exports.createAccount = async function (req, res) {
+    try {
+        const { name, email, password } = req.body;
 
-    //  Password -> directly storing -> db got hackend -> hackers will get id and password 
-    //  token system -> there is right now no double check on users -> unauthorised access can happen
+        // Validate required fields
+        if (!name || !email || !password) {
+            return res.status(400).json({ 
+                message: "Missing required fields: name, email, and password are required" 
+            });
+        }
 
-    // password -> hash -> crypting -> 
+        // Check if user already exists
+        const existingUser = await userModel.findOne({ email });
+        if (existingUser) {
+            return res.status(409).json({ 
+                message: "User with this email already exists" 
+            });
+        }
 
-    // crypting means -> adding random words to your password using an algo -> salting
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-    // himanshu123ABC!@#123
-    // algorithm 
+        const newUser = await userModel.create({
+            name,
+            email,
+            password: hashedPassword
+        });
 
-    // salt -> Random Words
-
-    // Salting -> Adding Random salt to your passswords 
-
-    // Deciding salt and way to add salting depends on algo 
-
-    // After doping salting
-
-    //  hash -> converting your salted password -> fully random words 
-
-    // himanshu123 + ABC123 => Hashing => 123@123ABCDEF@@!@#@$2EDCFRWESADAF
-
-    // ->  db we will stored hashed password -> actual converted to hashed password
-
-
-    // earlier -> himanshu123
-    // -> 123@123ABCDEF@@!@#@$2EDCFRWESADAF
-
-    //  salt
-
-
-    const newUser = req.body
-
-    let salt = await bcrypt.genSalt(10)
-
-    let hashedPassword = await bcrypt.hash(newUser.password, salt)
-
-    newUser.password = hashedPassword
-
-    await userModel.create(newUser)  // a call to mongodb now tht use this model linked schema linnked table and use this data and add in it in db simple
-    res.send("Create User is ready")
+        res.status(201).json({ 
+            message: "User created successfully",
+            user: {
+                _id: newUser._id,
+                name: newUser.name,
+                email: newUser.email
+            }
+        });
+    } catch (error) {
+        console.error("Signup error:", error);
+        
+        // Handle MongoDB duplicate key error
+        if (error.code === 11000) {
+            return res.status(409).json({ 
+                message: "User with this email already exists" 
+            });
+        }
+        
+        // Handle validation errors
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({ 
+                message: error.message || "Validation error" 
+            });
+        }
+        
+        res.status(500).json({ 
+            message: "Internal server error",
+            error: process.env.NODE_ENV === "development" ? error.message : undefined
+        });
+    }
 }
 
 // login function which will be used to login the user to the system which will return a token and refresh token
 exports.loginAccount = async function (req, res) {
-    const { email, password } = req.body
+    try {
+        const { email, password } = req.body
 
-    if (!email || !password) {
-        return res.status(401).json({ message: "Invalid Credentials" })
-    }
-
-    const user = await userModel.findOne({ email });
-    if (!user) {
-        return res.status(401).json({ message: "Invalid Credentials" })
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password)
-
-    if (!isMatch) {
-        return res.status(401).json({ message: "Invalid Credentials" })
-    }
-
-    let accessToken = generateAccessToken({ userId: user._id, email: user.email })
-
-    let refreshToken = generateRefreshToken({ userId: user._id })
-
-    user.refreshToken = refreshToken  // in db as well , to store in db cause for long term use // before that user collection will be aupdated with refreshToken
-
-    await user.save()
-
-    res.json({
-        message: "login successfull",
-        accessToken,
-        refreshToken,
-        user: {
-            _id: user._id,
-            name: user.name,
-            email: user.email
+        if (!email || !password) {
+            return res.status(401).json({ message: "Invalid Credentials" })
         }
-    })
+
+        const user = await userModel.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ message: "Invalid Credentials" })
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password)
+
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid Credentials" })
+        }
+
+        let accessToken = generateAccessToken({ userId: user._id, email: user.email })
+
+        let refreshToken = generateRefreshToken({ userId: user._id })
+
+        user.refreshToken = refreshToken  // in db as well , to store in db cause for long term use // before that user collection will be aupdated with refreshToken
+
+        await user.save()
+
+        res.json({
+            message: "login successfull",
+            accessToken,
+            refreshToken,
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email
+            }
+        })
+    } catch (error) {
+        console.error("Login error:", error);
+        res.status(500).json({ 
+            message: "Internal server error",
+            error: process.env.NODE_ENV === "development" ? error.message : undefined
+        });
+    }
 }
 
 // logout function which will be used to logout the user from the system
