@@ -14,7 +14,7 @@ cloudinary.config({
 
 exports.resizeImage = async function (req, res) {
     try {
-        const { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, userId } = req.body
+        const { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, userId, rotate, crop } = req.body
 
         if (!imageLink) {
             return res.status(400).json({
@@ -118,6 +118,38 @@ exports.resizeImage = async function (req, res) {
             };
         }
 
+        // Apply ROTATE transformation if requested
+        if (rotate && !isNaN(parseInt(rotate))) {
+            const rotationAngle = parseInt(rotate);
+            sharpInstance.rotate(rotationAngle);
+        }
+
+        // Apply CROP transformation if requested
+        // crop expects: { left, top, width, height }
+        if (crop && typeof crop === 'object') {
+            const cropLeft = parseInt(crop.left) || 0;
+            const cropTop = parseInt(crop.top) || 0;
+            const cropWidth = parseInt(crop.width);
+            const cropHeight = parseInt(crop.height);
+
+            if (cropWidth && cropHeight) {
+                // Validate crop dimensions against image metadata
+                if (cropLeft + cropWidth <= metadata.width && cropTop + cropHeight <= metadata.height) {
+                    sharpInstance.extract({
+                        left: cropLeft,
+                        top: cropTop,
+                        width: cropWidth,
+                        height: cropHeight
+                    });
+                } else {
+                    return res.status(400).json({
+                        message: "Crop dimensions exceed image boundaries"
+                    });
+                }
+            }
+        }
+
+        // Apply RESIZE transformation
         if (resizeOptions.width || resizeOptions.height) {
             sharpInstance.resize({
                 width: resizeOptions.width,
@@ -166,7 +198,7 @@ exports.resizeImage = async function (req, res) {
                 imageLink: uploadResult.secure_url,
                 imageFormat: outputFormat || "jpg",
                 date: new Date(),
-                options: { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat },
+                options: { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, rotate, crop },
                 userId: userId
             })
         } catch (error) {
@@ -176,8 +208,13 @@ exports.resizeImage = async function (req, res) {
 
         res.status(200).json({
             success: true,
-            message: "Image resized and uploaded successfully",
+            message: "Image transformed and uploaded successfully",
             resizedImageUrl: uploadResult.secure_url,
+            transformations: {
+                resize: resizeOptions.width || resizeOptions.height ? resizeOptions : null,
+                rotate: rotate || null,
+                crop: crop || null
+            }
         });
     } catch (error) {
         logger.error({ err: error }, "Resize image error");
