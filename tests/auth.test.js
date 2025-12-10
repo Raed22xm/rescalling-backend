@@ -48,9 +48,10 @@ describe("auth flow", () => {
     const signupRes = await request(app)
       .post("/api/v1/users/signup")
       .send({ name: "User", email, password })
-      .expect(200)
+      .expect(201)
 
-    expect(signupRes.text).toMatch(/Create User is ready/i)
+    expect(signupRes.body).toHaveProperty("message")
+    expect(signupRes.body.message).toMatch(/User created successfully/i)
 
     const loginRes = await request(app)
       .post("/api/v1/users/login")

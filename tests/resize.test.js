@@ -19,8 +19,8 @@ jest.mock("axios", () => {
 jest.mock("sharp", () => {
   return jest.fn(() => ({
     metadata: async () => ({ size: 500, width: 100, height: 100 }),
-    resize: function() { return this },
-    toFormat: function() {
+    resize: function () { return this },
+    toFormat: function () {
       return {
         toBuffer: async () => Buffer.from("resized"),
       }
@@ -77,7 +77,7 @@ describe("resize quota", () => {
     await request(app)
       .post("/api/v1/users/signup")
       .send({ name: "Quota User", email, password })
-      .expect(200)
+      .expect(201)
 
     const loginRes = await request(app)
       .post("/api/v1/users/login")
