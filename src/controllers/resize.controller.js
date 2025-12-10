@@ -50,7 +50,7 @@ exports.resizeImage = async function (req, res) {
         let response;
         try {
             response = await axios.get(imageLink, { responseType: "arraybuffer", timeout: 30000 })
-        } catch (error) {
+        } catch {
             return res.status(400).json({
                 message: "Failed to fetch image from the provided link. Please check the image URL."
             })
@@ -62,7 +62,7 @@ exports.resizeImage = async function (req, res) {
         let metadata;
         try {
             metadata = await sharpInstance.metadata()
-        } catch (error) {
+        } catch {
             return res.status(400).json({
                 message: "Invalid image format or corrupted image file."
             })
@@ -163,7 +163,7 @@ exports.resizeImage = async function (req, res) {
             resizedBuffer = await sharpInstance
                 .toFormat(outputFormat || "jpg")
                 .toBuffer();
-        } catch (error) {
+        } catch {
             return res.status(400).json({
                 message: "Failed to resize image. Invalid output format or processing error."
             })
