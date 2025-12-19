@@ -14,7 +14,7 @@ cloudinary.config({
 
 exports.resizeImage = async function (req, res) {
     try {
-        const { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, userId, rotate, crop } = req.body
+        const { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, userId, rotate, crop, filter } = req.body
 
         if (!imageLink) {
             return res.status(400).json({
@@ -149,6 +149,30 @@ exports.resizeImage = async function (req, res) {
             }
         }
 
+        // Apply FILTER transformation if requested
+        // Supported filters: grayscale, blur, sharpen, negate
+        if (filter && typeof filter === 'string') {
+            const filterType = filter.toLowerCase();
+            switch (filterType) {
+                case 'grayscale':
+                case 'greyscale':
+                    sharpInstance.grayscale();
+                    break;
+                case 'blur':
+                    sharpInstance.blur(5); // Gaussian blur with sigma 5
+                    break;
+                case 'sharpen':
+                    sharpInstance.sharpen();
+                    break;
+                case 'negate':
+                    sharpInstance.negate();
+                    break;
+                default:
+                    // Unknown filter, ignore
+                    break;
+            }
+        }
+
         // Apply RESIZE transformation
         if (resizeOptions.width || resizeOptions.height) {
             sharpInstance.resize({
@@ -198,7 +222,7 @@ exports.resizeImage = async function (req, res) {
                 imageLink: uploadResult.secure_url,
                 imageFormat: outputFormat || "jpg",
                 date: new Date(),
-                options: { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, rotate, crop },
+                options: { imageLink, manageAspectRatio, size, presetSize, width, height, outputFormat, rotate, crop, filter },
                 userId: userId
             })
         } catch (error) {
@@ -213,7 +237,8 @@ exports.resizeImage = async function (req, res) {
             transformations: {
                 resize: resizeOptions.width || resizeOptions.height ? resizeOptions : null,
                 rotate: rotate || null,
-                crop: crop || null
+                crop: crop || null,
+                filter: filter || null
             }
         });
     } catch (error) {
