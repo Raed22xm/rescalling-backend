@@ -126,15 +126,19 @@ exports.resizeImage = async function (req, res) {
 
         // Apply CROP transformation if requested
         // crop expects: { left, top, width, height }
+        logger.info({ crop: crop, cropType: typeof crop }, "Crop data received");
         if (crop && typeof crop === 'object') {
             const cropLeft = parseInt(crop.left) || 0;
             const cropTop = parseInt(crop.top) || 0;
             const cropWidth = parseInt(crop.width);
             const cropHeight = parseInt(crop.height);
 
+            logger.info({ cropLeft, cropTop, cropWidth, cropHeight, imageWidth: metadata.width, imageHeight: metadata.height }, "Crop parameters parsed");
+
             if (cropWidth && cropHeight) {
                 // Validate crop dimensions against image metadata
                 if (cropLeft + cropWidth <= metadata.width && cropTop + cropHeight <= metadata.height) {
+                    logger.info("Applying crop transformation");
                     sharpInstance.extract({
                         left: cropLeft,
                         top: cropTop,
@@ -142,6 +146,7 @@ exports.resizeImage = async function (req, res) {
                         height: cropHeight
                     });
                 } else {
+                    logger.warn({ cropLeft, cropTop, cropWidth, cropHeight, imageWidth: metadata.width, imageHeight: metadata.height }, "Crop dimensions exceed image boundaries");
                     return res.status(400).json({
                         message: "Crop dimensions exceed image boundaries"
                     });
