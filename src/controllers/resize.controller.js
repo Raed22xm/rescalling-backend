@@ -244,6 +244,15 @@ exports.resizeImage = async function (req, res) {
                 rotate: rotate || null,
                 crop: crop || null,
                 filter: filter || null
+            },
+            debug: {
+                cropParams: crop,
+                cropType: typeof crop,
+                // Assuming isCropApplied is defined earlier based on the crop logic
+                // For now, we'll infer it from the presence of cropWidth and cropHeight
+                cropApplied: (crop && typeof crop === 'object' && parseInt(crop.width) && parseInt(crop.height)) ? true : false,
+                metaWidth: metadata.width,
+                metaHeight: metadata.height
             }
         });
     } catch (error) {
